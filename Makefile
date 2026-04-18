@@ -33,3 +33,14 @@ run:
 
 clean:
 	rm -rf $(BUILD_DIR)
+# Fast push 
+# --- Git Automation ---
+# Usage: make push NAME=Ahmed MSG="Fixed the blur"
+# Default name is Zeyad if you don't provide one
+NAME ?= Zeyad
+MSG ?= Update
+
+push:
+	git add .
+	git commit -m "Architect ($(NAME)): $(MSG)"
+	git push

@@ -1,0 +1,16 @@
+# Build artifacts
+*.o
+*.elf
+build/
+bin/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Large raw data
+*.raw
+
+# Ignore the toolchain and qemu folders if they are inside this directory
+qemu/
+riscv-gnu-toolchain/

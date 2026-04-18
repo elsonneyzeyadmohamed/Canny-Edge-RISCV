@@ -1,6 +1,6 @@
 #include "image_types.hpp"
 #include <iostream>
-
+// edited to test makefile
 // Empty "stubs" so the compiler doesn't complain while your team works
 void gaussian_blur(const Image& in, Image& out) { out = in; } // Just a copy for now
 void sobel_filter(const Image& in, Image& gx, Image& gy) {}

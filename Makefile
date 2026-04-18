@@ -1,0 +1,35 @@
+# --- Setup Variables ---
+# The compiler we just built and put in our PATH
+CXX_RISCV = riscv64-unknown-elf-g++
+# The standard compiler on your WSL/Linux for testing
+CXX_NATIVE = g++
+
+# Compiler Flags
+# -march=rv64gcv tells the compiler to use the Vector (v) extension
+CXXFLAGS_RISCV = -march=rv64gcv -O3 -Wall
+CXXFLAGS_NATIVE = -O3 -Wall -lgtest -lgtest_main -lpthread
+
+# Directories
+SRC_DIR = src
+INC_DIR = include
+BUILD_DIR = build
+
+# --- Targets ---
+
+# 1. Compile for RISC-V (The Project Goal)
+riscv:
+	mkdir -p $(BUILD_DIR)
+	$(CXX_RISCV) $(CXXFLAGS_RISCV) -I$(INC_DIR) $(SRC_DIR)/*.cpp -o $(BUILD_DIR)/canny_riscv.elf
+
+# 2. Compile for your PC (For Google Test)
+native:
+	mkdir -p $(BUILD_DIR)
+	$(CXX_NATIVE) $(CXXFLAGS_NATIVE) -I$(INC_DIR) $(SRC_DIR)/*.cpp tests/*.cpp -o $(BUILD_DIR)/test_runner
+
+# 3. Run the RISC-V code on QEMU
+# cpu=rv64,v=true enables the vector engine in the simulator
+run:
+	qemu-riscv64 -cpu rv64,v=true,vlen=128 $(BUILD_DIR)/canny_riscv.elf
+
+clean:
+	rm -rf $(BUILD_DIR)

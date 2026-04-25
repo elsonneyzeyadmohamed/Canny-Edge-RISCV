@@ -1,48 +1,39 @@
 #include "image_types.hpp"
 #include "canny.hpp"
-#include <iostream>
-#include <string>
+#include <cstdio>
 
-using namespace std;
-
-// Declarations
-bool load_raw(const string& path, Image& img);
-bool save_raw(const string& path, const Image& img);
-
+/**
+ * Main Entry Point for the Canny Edge Detection Pipeline.
+ * This version uses Standard I/O (stdin/stdout) to handle image data,
+ * providing a reliable way to process images in a RISC-V emulated environment.
+ */
 int main() {
-    cout << "--- Canny Edge RISCV Pipeline Starting ---" << endl;
-
+    // Image dimensions (Fixed for this stage of the project)
     const int W = 512;
     const int H = 512;
 
-    // 1. Create containers
+    // Initialize image buffers
     Image tiger(W, H);
     Image blurred(W, H);
     Image edge_result(W, H);
 
-    // 2. Load the image
-    // Note: Make sure the file is in 'data/' folder or update the path
-    if (!load_raw("data/tiger.raw", tiger)) {
-        return 1; 
-    }
-    cout << "Step 1: Tiger loaded successfully." << endl;
+    // Step 1: Read raw pixel data from standard input (stdin)
+    // This allows us to pipe image data directly into the emulator
+    std::fread(tiger.data.data(), 1, W * H, stdin);
 
-    // 3. Initialize your Detector
+    // Step 2: Initialize the Canny Edge Detector
     CannyEdgeDetector detector(W, H);
 
-    // 4. Run your Gaussian Blur
+    // Step 3: Execute the pipeline stages
+    // 3a. Noise reduction using Gaussian Blur
     detector.applyGaussianBlur(tiger.data.data(), blurred.data.data());
-    cout << "Step 2: Gaussian Blur applied." << endl;
-
-    // 5. Run your Sobel Gradient
+    
+    // 3b. Gradient calculation using Sobel Operator
     detector.applySobel(blurred.data.data(), edge_result.data.data());
-    cout << "Step 3: Sobel Gradient applied." << endl;
 
-    // 6. Save the result
-    if (save_raw("output.raw", edge_result)) {
-        cout << "Step 4: Result saved to output.raw." << endl;
-    }
+    // Step 4: Write the final processed pixels to standard output (stdout)
+    // This data can be piped back to a converter to view the image
+    std::fwrite(edge_result.data.data(), 1, W * H, stdout);
 
-    cout << "--- Pipeline Finished ---" << endl;
     return 0;
 }

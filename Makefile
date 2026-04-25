@@ -44,3 +44,17 @@ push:
 	git add .
 	git commit -m "Architect ($(NAME)): $(MSG)"
 	git push
+
+# --- Image Processing Automation ---
+# Usage: make test_image IMG=tiger-animals-cat-predator-preview.jpg
+IMG ?= tiger-animals-cat-predator-preview.jpg
+RESULT_DIR = results
+FINAL_OUT = $(RESULT_DIR)/final_result.png
+
+test_image: riscv
+	@mkdir -p $(RESULT_DIR)
+	@echo "Processing $(IMG)..."
+	@convert $(IMG) -resize 512x512! -colorspace gray -depth 8 gray:- | \
+	qemu-riscv64 -cpu rv64,v=true,vlen=128 $(BUILD_DIR)/canny_riscv.elf | \
+	convert -size 512x512 -depth 8 gray:- $(FINAL_OUT)
+	@echo "Done! Result saved in: $(FINAL_OUT)"

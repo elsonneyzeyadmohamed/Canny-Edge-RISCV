@@ -1,39 +1,53 @@
 #include "image_types.hpp"
 #include "canny.hpp"
 #include <cstdio>
+#include <cstdint>
+#include <vector>
 
-/**
- * Main Entry Point for the Canny Edge Detection Pipeline.
- * This version uses Standard I/O (stdin/stdout) to handle image data,
- * providing a reliable way to process images in a RISC-V emulated environment.
- */
 int main() {
-    // Image dimensions (Fixed for this stage of the project)
+    // Image dimensions
     const int W = 512;
     const int H = 512;
+    const int N = W * H;
 
-    // Initialize image buffers
+    // --- Input / Output buffers ---
     Image tiger(W, H);
     Image blurred(W, H);
-    Image edge_result(W, H);
 
-    // Step 1: Read raw pixel data from standard input (stdin)
-    // This allows us to pipe image data directly into the emulator
-    std::fread(tiger.data.data(), 1, W * H, stdin);
+    // Gx and Gy stored SEPARATELY (Structure of Arrays)
+    // Better for RVV vectorization later
+    std::vector<int16_t> gx(N), gy(N);
 
-    // Step 2: Initialize the Canny Edge Detector
+    // Magnitude buffers (L1 and L2)
+    std::vector<unsigned char> mag_l1(N), mag_l2(N);
+
+    // Direction buffer (values: 0, 1, 2, 3)
+    std::vector<unsigned char> direction(N);
+
+    // --- Step 1: Read raw grayscale image from stdin ---
+    std::fread(tiger.data.data(), 1, N, stdin);
+
+    // --- Step 2: Initialize detector ---
     CannyEdgeDetector detector(W, H);
 
-    // Step 3: Execute the pipeline stages
-    // 3a. Noise reduction using Gaussian Blur
+    // --- Step 3: Gaussian Blur (5x5, zero-padding) ---
     detector.applyGaussianBlur(tiger.data.data(), blurred.data.data());
-    
-    // 3b. Gradient calculation using Sobel Operator
-    detector.applySobel(blurred.data.data(), edge_result.data.data());
 
-    // Step 4: Write the final processed pixels to standard output (stdout)
-    // This data can be piped back to a converter to view the image
-    std::fwrite(edge_result.data.data(), 1, W * H, stdout);
+    // --- Step 4: Sobel -> separate Gx and Gy ---
+    detector.applySobel(blurred.data.data(), gx.data(), gy.data());
+
+    // --- Step 5a: Magnitude L1 = |Gx| + |Gy| ---
+    detector.computeMagnitudeL1(gx.data(), gy.data(), mag_l1.data());
+
+    // --- Step 5b: Magnitude L2 = sqrt(Gx^2 + Gy^2) ---
+    detector.computeMagnitudeL2(gx.data(), gy.data(), mag_l2.data());
+
+    // --- Step 6: Gradient Direction (0=0deg, 1=45, 2=90, 3=135) ---
+    detector.computeDirection(gx.data(), gy.data(), direction.data());
+
+    // --- Step 7: Output L2 magnitude (best quality) to stdout ---
+    // Change mag_l2 to mag_l1 to compare outputs
+    std::fwrite(mag_l2.data(), 1, N, stdout);
 
     return 0;
 }

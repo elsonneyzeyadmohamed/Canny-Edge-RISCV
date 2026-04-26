@@ -1,35 +1,60 @@
 #include "image_types.hpp"
-#include <iostream>
-// edited to test makefile
-// Empty "stubs" so the compiler doesn't complain while your team works
-void gaussian_blur(const Image& in, Image& out) { out = in; } // Just a copy for now
-void sobel_filter(const Image& in, Image& gx, Image& gy) {}
-void non_max_suppression(const Image& m, const Image& gx, const Image& gy, Image& out) {}
-void double_threshold(Image& in, uint8_t l, uint8_t h) {}
-void hysteresis(Image& in) {}
+#include "canny.hpp"
+#include <cstdio>
+#include <cstdint>
+#include <vector>
+
+using namespace std;
 
 int main() {
-    std::cout << "--- Canny Edge RISCV Pipeline Starting ---" << std::endl;
+    const int W = 512;
+    const int H = 512;
+    const int N = W * H;
 
-    // 1. Create containers (512x512 for Tiger)
-    Image tiger(512, 512);
-    Image result(512, 512);
+    Image tiger(W, H);
+    Image blurred(W, H);
 
-    // 2. Load the image
-    if (!load_raw("tiger.raw", tiger)) {
-        return 1; 
+    // Gx and Gy SEPARATE (Structure of Arrays) - better for RVV vectorization
+    vector<int16_t> gx(N), gy(N);
+
+    // Two magnitude methods for comparison
+    vector<unsigned char> mag_l1(N), mag_l2(N);
+
+    // Direction: 0=0deg, 1=45deg, 2=90deg, 3=135deg
+    vector<unsigned char> direction(N);
+
+    // Step 1: Read raw grayscale from stdin
+    fread(tiger.data.data(), 1, N, stdin);
+
+    // Step 2: Initialize detector
+    CannyEdgeDetector detector(W, H);
+
+    // Step 3: Gaussian Blur (5x5, weight=273, zero-padding)
+    detector.applyGaussianBlur(tiger.data.data(), blurred.data.data());
+
+    // Step 4: Sobel -> separate Gx and Gy
+    detector.applySobel(blurred.data.data(), gx.data(), gy.data());
+
+    // Step 5a: L1 magnitude = |Gx| + |Gy|
+    detector.computeMagnitudeL1(gx.data(), gy.data(), mag_l1.data());
+
+    // Step 5b: L2 magnitude = sqrt(Gx^2 + Gy^2)
+    detector.computeMagnitudeL2(gx.data(), gy.data(), mag_l2.data());
+
+    // Step 6: Gradient direction
+    detector.computeDirection(gx.data(), gy.data(), direction.data());
+
+    // Step 7: Output L2 then L1 to stdout
+    fwrite(mag_l2.data(), 1, N, stdout);
+    fwrite(mag_l1.data(), 1, N, stdout);
+    
+    // Step 8: Save L1 to file for visual comparison with L2
+    // L1 is faster (no sqrt) but overestimates diagonal edges
+    FILE* f = fopen("/tmp/mag_l1.raw", "wb");
+    if (f) {
+        fwrite(mag_l1.data(), 1, N, f);
+        fclose(f);
     }
-    std::cout << "Step 1: Tiger loaded successfully." << std::endl;
 
-    // 3. Run Gaussian Blur (Using Student 1's future code)
-    gaussian_blur(tiger, result);
-    std::cout << "Step 2: Gaussian Blur applied." << std::endl;
-
-    // 4. Save the result
-    if (save_raw("output.raw", result)) {
-        std::cout << "Step 3: Result saved to output.raw." << std::endl;
-    }
-
-    std::cout << "--- Pipeline Finished ---" << std::endl;
     return 0;
 }

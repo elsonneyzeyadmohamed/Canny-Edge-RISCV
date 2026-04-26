@@ -2,14 +2,17 @@
 #include <cmath>
 #include <cstdlib>
 #include <algorithm>
+#include <vector>
+
+using namespace std;
 
 CannyEdgeDetector::CannyEdgeDetector(int w, int h) : width(w), height(h) {}
 
 // =============================================================
 // Stage 1: Gaussian Blur
-// 5x5 kernel with sigma~1.0, integer coefficients sum = 273
-// Boundary handling: zero-padding (out-of-bounds pixels = 0)
-// Accumulator: int32_t to avoid overflow (max = 255 * 41 * 25)
+// 5x5 kernel, sigma~1.0, integer coefficients sum = 273
+// Boundary: zero-padding (out-of-bounds pixels treated as 0)
+// Accumulator: int32_t to avoid overflow (max = 255 * 15 * 25)
 // =============================================================
 void CannyEdgeDetector::applyGaussianBlur(const unsigned char* input,
                                            unsigned char* output) {
@@ -29,7 +32,7 @@ void CannyEdgeDetector::applyGaussianBlur(const unsigned char* input,
                 for (int kx = -2; kx <= 2; kx++) {
                     int ny = y + ky;
                     int nx = x + kx;
-                    // Zero-padding: treat out-of-bounds as 0
+                    // Zero-padding: skip out-of-bounds (treat as 0)
                     if (ny < 0 || ny >= height || nx < 0 || nx >= width)
                         continue;
                     sum += (int32_t)input[ny * width + nx] * kernel[ky + 2][kx + 2];
@@ -43,14 +46,15 @@ void CannyEdgeDetector::applyGaussianBlur(const unsigned char* input,
 
 // =============================================================
 // Stage 2: Sobel Operator
-// Returns Gx and Gy as SEPARATE int16_t arrays (Structure of Arrays)
-// SoA layout chosen for RVV vectorization: consecutive Gx values
-// load as a single vector instruction (no gather needed).
-// int16_t is sufficient: max value = 4*255 = 1020 < 32767
+// Gx and Gy stored SEPARATELY (Structure of Arrays / SoA)
+// SoA chosen over AoS for RVV: consecutive Gx loads = 1 vector load
+// int16_t sufficient: max Sobel value = 4*255 = 1020 < 32767
 // =============================================================
 void CannyEdgeDetector::applySobel(const unsigned char* input,
                                     int16_t* gx, int16_t* gy) {
+    // Sobel-X: detects vertical edges (horizontal gradient)
     const int Kx[3][3] = {{-1, 0, 1}, {-2, 0, 2}, {-1, 0, 1}};
+    // Sobel-Y: detects horizontal edges (vertical gradient)
     const int Ky[3][3] = {{-1,-2,-1}, { 0, 0, 0}, { 1, 2, 1}};
 
     for (int y = 0; y < height; y++) {
@@ -76,18 +80,18 @@ void CannyEdgeDetector::applySobel(const unsigned char* input,
 // =============================================================
 // Stage 3a: Gradient Magnitude - L1 Norm
 // L1 = |Gx| + |Gy|
-// Faster than L2 (no sqrt), slight overestimate on diagonals.
-// Two-pass: first find max, then normalize to [0,255].
+// Faster than L2 (no sqrt), slight overestimate on diagonals
+// Two-pass: find max -> normalize to [0,255]
 // =============================================================
 void CannyEdgeDetector::computeMagnitudeL1(const int16_t* gx,
                                             const int16_t* gy,
                                             unsigned char* magnitude) {
     const int N = width * height;
-    std::vector<int> raw(N);
+    vector<int> raw(N);
 
     int maxVal = 1;
     for (int i = 0; i < N; i++) {
-        raw[i] = std::abs((int)gx[i]) + std::abs((int)gy[i]);
+        raw[i] = abs((int)gx[i]) + abs((int)gy[i]);
         if (raw[i] > maxVal) maxVal = raw[i];
     }
     for (int i = 0; i < N; i++)
@@ -96,18 +100,18 @@ void CannyEdgeDetector::computeMagnitudeL1(const int16_t* gx,
 
 // =============================================================
 // Stage 3b: Gradient Magnitude - L2 Norm
-// L2 = sqrt(Gx^2 + Gy^2)  - mathematically correct
-// Two-pass: first find max, then normalize to [0,255].
+// L2 = sqrt(Gx^2 + Gy^2) - mathematically correct
+// Two-pass: find max -> normalize to [0,255]
 // =============================================================
 void CannyEdgeDetector::computeMagnitudeL2(const int16_t* gx,
                                             const int16_t* gy,
                                             unsigned char* magnitude) {
     const int N = width * height;
-    std::vector<float> raw(N);
+    vector<float> raw(N);
 
     float maxVal = 1.0f;
     for (int i = 0; i < N; i++) {
-        raw[i] = std::sqrt((float)gx[i] * gx[i] + (float)gy[i] * gy[i]);
+        raw[i] = sqrt((float)gx[i] * gx[i] + (float)gy[i] * gy[i]);
         if (raw[i] > maxVal) maxVal = raw[i];
     }
     for (int i = 0; i < N; i++)
@@ -116,28 +120,28 @@ void CannyEdgeDetector::computeMagnitudeL2(const int16_t* gx,
 
 // =============================================================
 // Stage 4: Gradient Direction
-// Quantizes to 4 directions: 0, 45, 90, 135 degrees.
+// Quantizes to 4 directions: 0, 45, 90, 135 degrees
 // Uses INTEGER cross-multiplication instead of atan2():
-//   tan(22.5°) ~ 2/5  -> ay*5 < ax*2  => 0°
-//   tan(67.5°) ~ 12/5 -> ay*5 > ax*12 => 90°
-//   otherwise         => 45° or 135° based on sign(Gx*Gy)
-// Output: 0=0°, 1=45°, 2=90°, 3=135°
+//   tan(22.5) ~ 2/5  -> ay*5 < ax*2  => 0 deg
+//   tan(67.5) ~ 12/5 -> ay*5 > ax*12 => 90 deg
+//   otherwise        => 45 or 135 based on sign(Gx*Gy)
+// Output: 0=0deg, 1=45deg, 2=90deg, 3=135deg
 // =============================================================
 void CannyEdgeDetector::computeDirection(const int16_t* gx,
                                           const int16_t* gy,
                                           unsigned char* direction) {
     const int N = width * height;
     for (int i = 0; i < N; i++) {
-        int ax = std::abs((int)gx[i]);
-        int ay = std::abs((int)gy[i]);
+        int ax = abs((int)gx[i]);
+        int ay = abs((int)gy[i]);
 
         unsigned char dir;
         if (ay * 5 < ax * 2)
-            dir = 0;                                    // ~0°
+            dir = 0;
         else if (ay * 5 > ax * 12)
-            dir = 2;                                    // ~90°
+            dir = 2;
         else
-            dir = ((int)gx[i] * (int)gy[i] >= 0) ? 1 : 3; // 45° or 135°
+            dir = ((int)gx[i] * (int)gy[i] >= 0) ? 1 : 3;
 
         direction[i] = dir;
     }

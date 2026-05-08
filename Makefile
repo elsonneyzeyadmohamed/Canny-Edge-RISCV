@@ -21,7 +21,7 @@ riscv:
 # 2. Compile and run GoogleTest on host
 native:
 	mkdir -p $(BUILD_DIR)
-	$(CXX_NATIVE) -O2 -I$(INC_DIR) tests/test_canny.cpp -o $(BUILD_DIR)/test_runner -lgtest -lgtest_main -lpthread
+	$(CXX_NATIVE) -O2 -I$(INC_DIR) tests/test_canny.cpp tests/test_nms.cpp src/nms.cpp  -o $(BUILD_DIR)/test_runner -lgtest -lgtest_main -lpthread
 
 test: native
 	./$(BUILD_DIR)/test_runner

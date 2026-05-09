@@ -1,11 +1,11 @@
-#include "image_types.hpp"
+#include "imaextern void double_threshold(uint8_t* input, uint8_t* output, int total_pixels, uint8_t low_thresh, uint8_t high_thresh);extern void double_threshold(uint8_t* input, uint8_t* output, int total_pixels, uint8_t low_thresh, uint8_t high_thresh);extern void double_threshold(uint8_t* input, uint8_t* output, int total_pixels, uint8_t low_thresh, uint8_t high_thresh);ge_types.hpp"
 #include "canny.hpp"
 #include <cstdio>
 #include <cstdint>
 #include <vector>
 
 using namespace std;
-extern void double_threshold(uint8_t* input, uint8_t* output, int total_pixels, uint8_t low_thresh, uint8_t high_thresh);
+
 int main() {
     const int W = 512;
     const int H = 512;
@@ -47,10 +47,8 @@ int main() {
     // Step 7: Output L2 then L1 to stdout
     fwrite(mag_l2.data(), 1, N, stdout);
     fwrite(mag_l1.data(), 1, N, stdout);
-    
-    //Step 8: Double Thresholding
-    double_threshold(mag_l1.data(), mag_l1.data(), N, 25, 255);
-
+    // Step 8: Double thresholding
+double_threshold(mag_l1.data(), mag_l1.data(), N, 25, 255);     
     // Step 9: Save L1 to file for visual comparison with L2
     // L1 is faster (no sqrt) but overestimates diagonal edges
     FILE* f = fopen("/tmp/mag_l1.raw", "wb");

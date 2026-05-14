@@ -1,5 +1,5 @@
 # --- Setup Variables ---
-CXX_RISCV  = riscv64-unknown-elf-g++
+CXX_RISCV  = riscv64-linux-gnu-g++
 CXX_NATIVE = g++
 
 # Compiler Flags

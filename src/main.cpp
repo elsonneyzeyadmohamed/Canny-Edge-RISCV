@@ -5,6 +5,7 @@
 #include <vector>
 #include "nms.h"
 #include <algorithm>
+#include "hysteresis.h"
 
 using namespace std;
 

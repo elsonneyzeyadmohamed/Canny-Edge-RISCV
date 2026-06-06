@@ -74,7 +74,20 @@ int main() {
     // Output: dt_out    (uint8_t)  — 255=strong, 128=weak, 0=none
     // Thresholds in uint16_t space: high=200, low=80
     double_threshold(nms_out.data(), dt_out.data(), N,
-                     /*low=*/80, /*high=*/200);
+                     /*low=*/10, /*high=*/30);
+
+// saves doublethresholding before used in hysteresis
+
+    FILE* g = fopen("/tmp/dt_out.raw", "wb");
+    if (g) { fwrite(dt_out.data(), 1, N, g); fclose(g); }
+
+
+// Step 9: Hysteresis (in-place on dt_out)
+// Input: dt_out (255=strong, 128=weak, 0=none)
+// Output: dt_out modified in-place (255=edge, 0=background)
+hysteresis(dt_out.data(), W, H);
+
+
 
     // Step 9: Write outputs to stdout (L2 | L1 | NMS | double threshold)
     fwrite(mag_l2.data(),  1, N, stdout);
@@ -93,8 +106,7 @@ int main() {
     FILE* f = fopen("/tmp/nms_out.raw", "wb");
     if (f) { fwrite(nms_u8.data(), 1, N, f); fclose(f); }
 
-    FILE* g = fopen("/tmp/dt_out.raw", "wb");
-    if (g) { fwrite(dt_out.data(), 1, N, g); fclose(g); }
-
+    FILE* h = fopen("/tmp/hysteresis_out.raw", "wb");
+    if (h) { fwrite(dt_out.data(), 1, N, h); fclose(h); }
     return 0;
 }

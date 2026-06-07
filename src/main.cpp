@@ -48,6 +48,7 @@ int main() {
     // Bare-metal safe timing variables
     clock_t start_time, end_time;
     double elapsed_ms;
+    double gaussian_ms, sobel_ms, magnitude_ms, direction_ms;
 
     cerr << "--- Starting Phase 4 Performance Sweeps (" << ITERATIONS << " iterations) ---\n";
 
@@ -62,6 +63,7 @@ int main() {
     
     elapsed_ms = (double)(end_time - start_time) / CLOCKS_PER_SEC * 1000.0;
     cerr << "Gaussian 5x5 Average Time : " << (elapsed_ms / ITERATIONS) << " ms\n";
+    gaussian_ms = (double)(end_time - start_time) / CLOCKS_PER_SEC * 1000.0 / ITERATIONS;
 
     // ==========================================
     // Step 4: Sobel -> separate Gx and Gy
@@ -74,7 +76,8 @@ int main() {
     
     elapsed_ms = (double)(end_time - start_time) / CLOCKS_PER_SEC * 1000.0;
     cerr << "Sobel Gx/Gy Average Time   : " << (elapsed_ms / ITERATIONS) << " ms\n";
-
+    sobel_ms = (double)(end_time - start_time) / CLOCKS_PER_SEC * 1000.0 / ITERATIONS;
+    
     // ==========================================
     // Step 5: Gradient Magnitude (L2 Norm Evaluated)
     // ==========================================
@@ -93,6 +96,7 @@ int main() {
     for (int i = 0; i < N; ++i)
         mag_l2_u16[i] = static_cast<uint16_t>(mag_l2[i]);
 
+    magnitude_ms = (double)(end_time - start_time) / CLOCKS_PER_SEC * 1000.0 / ITERATIONS;
     // ==========================================
     // Step 6: Gradient direction
     // ==========================================
@@ -104,7 +108,7 @@ int main() {
     
     elapsed_ms = (double)(end_time - start_time) / CLOCKS_PER_SEC * 1000.0;
     cerr << "Direction Average Time     : " << (elapsed_ms / ITERATIONS) << " ms\n";
-
+    direction_ms = (double)(end_time - start_time) / CLOCKS_PER_SEC * 1000.0 / ITERATIONS;
     cerr << "---------------------------------------------------------\n";
 
     // Step 7: Non-Maximum Suppression (thins edges to 1-pixel width)
@@ -141,5 +145,14 @@ int main() {
     FILE* h = fopen("/tmp/hysteresis_out.raw", "wb");
     if (h) { fwrite(dt_out.data(), 1, N, h); fclose(h); }
     
+    // Phase 5: Hotspot Identification
+    double total_ms = gaussian_ms + sobel_ms + magnitude_ms + direction_ms;
+    cerr << "\n--- Phase 5: Hotspot Identification ---\n";
+    cerr << "Gaussian  : " << (gaussian_ms  / total_ms * 100.0) << "%\n";
+    cerr << "Sobel     : " << (sobel_ms     / total_ms * 100.0) << "%\n";
+    cerr << "Magnitude : " << (magnitude_ms / total_ms * 100.0) << "%\n";
+    cerr << "Direction : " << (direction_ms / total_ms * 100.0) << "%\n";
+    cerr << "Total avg : " << total_ms << " ms per iteration\n"; 
+
     return 0;
 }

@@ -49,6 +49,7 @@ int main() {
     clock_t start_time, end_time;
     double elapsed_ms;
     double gaussian_ms, sobel_ms, magnitude_ms, direction_ms;
+    double nms_ms, dt_ms, hysteresis_ms;
 
     cerr << "--- Starting Phase 4 Performance Sweeps (" << ITERATIONS << " iterations) ---\n";
 
@@ -62,7 +63,7 @@ int main() {
     end_time = clock();
     
     elapsed_ms = (double)(end_time - start_time) / CLOCKS_PER_SEC * 1000.0;
-    cerr << "Gaussian 5x5 Average Time : " << (elapsed_ms / ITERATIONS) << " ms\n";
+    cerr << "Gaussian 5x5 Average Time  : " << (elapsed_ms / ITERATIONS) << " ms\n";
     gaussian_ms = (double)(end_time - start_time) / CLOCKS_PER_SEC * 1000.0 / ITERATIONS;
 
     // ==========================================
@@ -91,12 +92,13 @@ int main() {
     
     elapsed_ms = (double)(end_time - start_time) / CLOCKS_PER_SEC * 1000.0;
     cerr << "Magnitude Average Time     : " << (elapsed_ms / ITERATIONS) << " ms\n";
+    magnitude_ms = (double)(end_time - start_time) / CLOCKS_PER_SEC * 1000.0 / ITERATIONS;
 
     // Step 5c: Convert L2 to uint16_t for NMS (preserves full range ~0-1441)
     for (int i = 0; i < N; ++i)
         mag_l2_u16[i] = static_cast<uint16_t>(mag_l2[i]);
 
-    magnitude_ms = (double)(end_time - start_time) / CLOCKS_PER_SEC * 1000.0 / ITERATIONS;
+    
     // ==========================================
     // Step 6: Gradient direction
     // ==========================================
@@ -109,22 +111,52 @@ int main() {
     elapsed_ms = (double)(end_time - start_time) / CLOCKS_PER_SEC * 1000.0;
     cerr << "Direction Average Time     : " << (elapsed_ms / ITERATIONS) << " ms\n";
     direction_ms = (double)(end_time - start_time) / CLOCKS_PER_SEC * 1000.0 / ITERATIONS;
-    cerr << "---------------------------------------------------------\n";
 
-    // Step 7: Non-Maximum Suppression (thins edges to 1-pixel width)
-    non_maximum_suppression(mag_l2_u16.data(), direction.data(),
-                            nms_out.data(), W, H);
+    // ==========================================
+    // Step 7: Non-Maximum Suppression
+    // ==========================================
+    start_time = clock();
+    for (int i = 0; i < ITERATIONS; ++i) {
+        non_maximum_suppression(mag_l2_u16.data(), direction.data(), nms_out.data(), W, H);
+    }
+    end_time = clock();
 
+    elapsed_ms = (double)(end_time - start_time) / CLOCKS_PER_SEC * 1000.0;
+    cerr << "NMS Average Time           : " << (elapsed_ms / ITERATIONS) << " ms\n";
+    nms_ms = elapsed_ms / ITERATIONS;
+
+    // ==========================================
     // Step 8: Double Threshold
-    double_threshold(nms_out.data(), dt_out.data(), N,
-                     /*low=*/10, /*high=*/30);
+    // ==========================================
+    start_time = clock();
+    for (int i = 0; i < ITERATIONS; ++i){
+        double_threshold(nms_out.data(), dt_out.data(), N, 10, 30);
+    }
+    end_time = clock();
+
+    elapsed_ms = (double)(end_time - start_time) / CLOCKS_PER_SEC * 1000.0;
+    cerr << "Double Threshold Avg Time  : " << (elapsed_ms / ITERATIONS) << " ms\n";
+    dt_ms = elapsed_ms / ITERATIONS;
 
     // saves doublethresholding before used in hysteresis
     FILE* g = fopen("/tmp/dt_out.raw", "wb");
     if (g) { fwrite(dt_out.data(), 1, N, g); fclose(g); }
 
-    // Step 9: Hysteresis (in-place on dt_out)
-    hysteresis(dt_out.data(), W, H);
+    // ==========================================
+    // Step 9: Hysteresis
+    // ==========================================
+
+    start_time = clock();
+    for (int i = 0; i < ITERATIONS; ++i){
+        hysteresis(dt_out.data(), W, H);
+    }    
+    end_time = clock();
+
+    elapsed_ms = (double)(end_time - start_time) / CLOCKS_PER_SEC * 1000.0;
+    cerr << "Hysteresis Average Time    : " << (elapsed_ms / ITERATIONS) << " ms\n";
+    hysteresis_ms = elapsed_ms / ITERATIONS;
+
+     cerr << "---------------------------------------------------------\n";
 
     // Step 10: Write outputs to stdout (L2 | L1 | NMS | double threshold)
     fwrite(mag_l2.data(),  1, N, stdout);
@@ -145,14 +177,19 @@ int main() {
     FILE* h = fopen("/tmp/hysteresis_out.raw", "wb");
     if (h) { fwrite(dt_out.data(), 1, N, h); fclose(h); }
     
-    // Phase 5: Hotspot Identification
-    double total_ms = gaussian_ms + sobel_ms + magnitude_ms + direction_ms;
+    // ==========================================
+      // Phase 5: Hotspot Identification
+    // ==========================================
+    double total_ms = gaussian_ms + sobel_ms + magnitude_ms + direction_ms + nms_ms + dt_ms + hysteresis_ms;
     cerr << "\n--- Phase 5: Hotspot Identification ---\n";
-    cerr << "Gaussian  : " << (gaussian_ms  / total_ms * 100.0) << "%\n";
-    cerr << "Sobel     : " << (sobel_ms     / total_ms * 100.0) << "%\n";
-    cerr << "Magnitude : " << (magnitude_ms / total_ms * 100.0) << "%\n";
-    cerr << "Direction : " << (direction_ms / total_ms * 100.0) << "%\n";
-    cerr << "Total avg : " << total_ms << " ms per iteration\n"; 
+    cerr << "Gaussian  : " << (gaussian_ms   / total_ms * 100.0) << "%\n";
+    cerr << "Sobel     : " << (sobel_ms      / total_ms * 100.0) << "%\n";
+    cerr << "Magnitude : " << (magnitude_ms  / total_ms * 100.0) << "%\n";
+    cerr << "Direction : " << (direction_ms  / total_ms * 100.0) << "%\n";
+    cerr << "NMS       : " << (nms_ms        / total_ms * 100.0) << "%\n";
+    cerr << "D.Thresh  : " << (dt_ms         / total_ms * 100.0) << "%\n";
+    cerr << "Hysteresis: " << (hysteresis_ms / total_ms * 100.0) << "%\n";
+    cerr << "Total avg : " << total_ms << " ms per iteration\n";
 
     return 0;
 }

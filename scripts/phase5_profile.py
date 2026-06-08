@@ -3,8 +3,8 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 # Phase 5 Results
-stages = ['Gaussian\n5x5', 'Sobel\nGx/Gy', 'Magnitude\nL2', 'Direction']
-times  = [9.29, 2.82, 12.78, 12.90]
+stages = ['Gaussian\n5x5', 'Sobel\nGx/Gy', 'Magnitude\nL2', 'Direction', 'NMS', 'Double\nThreshold', 'Hysteresis']
+times  = [8.9815, 2.76277, 12.3814 , 11.7632, 2.96779, 5.78142, 4.08238] 
 colors = ['#4CAF50', '#2196F3', '#FF5722', '#FF9800']
 
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))

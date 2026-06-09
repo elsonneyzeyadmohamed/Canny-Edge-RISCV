@@ -39,6 +39,9 @@ int main() {
     // Double threshold output (uint8_t: 255=strong, 128=weak, 0=none)
     vector<unsigned char> dt_out(N);
 
+    // Temporary copy buffer to safely profile Hysteresis loops
+    vector<unsigned char> dt_out_temp(N);
+
     // Step 1: Read raw grayscale from stdin
     (void)fread(tiger.data.data(), 1, N, stdin);
 
@@ -105,22 +108,51 @@ int main() {
     elapsed_ms = (double)(end_time - start_time) / CLOCKS_PER_SEC * 1000.0;
     cerr << "Direction Average Time     : " << (elapsed_ms / ITERATIONS) << " ms\n";
 
-    cerr << "---------------------------------------------------------\n";
-
+    // ==========================================
     // Step 7: Non-Maximum Suppression (thins edges to 1-pixel width)
-    non_maximum_suppression(mag_l2_u16.data(), direction.data(),
-                            nms_out.data(), W, H);
+    // ==========================================
+    start_time = clock();
+    for (int i = 0; i < ITERATIONS; ++i) {
+        non_maximum_suppression(mag_l2_u16.data(), direction.data(), nms_out.data(), W, H);
+    }
+    end_time = clock();
 
+    elapsed_ms = (double)(end_time - start_time) / CLOCKS_PER_SEC * 1000.0;
+    cerr << "NMS Average Time           : " << (elapsed_ms / ITERATIONS) << " ms\n";
+
+    // ==========================================
     // Step 8: Double Threshold
-    double_threshold(nms_out.data(), dt_out.data(), N,
-                     /*low=*/10, /*high=*/30);
+    // ==========================================
+    start_time = clock();
+    for (int i = 0; i < ITERATIONS; ++i) {
+        double_threshold(nms_out.data(), dt_out.data(), N, /*low=*/10, /*high=*/30);
+    }
+    end_time = clock();
+
+    elapsed_ms = (double)(end_time - start_time) / CLOCKS_PER_SEC * 1000.0;
+    cerr << "Double Threshold Avg Time  : " << (elapsed_ms / ITERATIONS) << " ms\n";
 
     // saves doublethresholding before used in hysteresis
     FILE* g = fopen("/tmp/dt_out.raw", "wb");
     if (g) { fwrite(dt_out.data(), 1, N, g); fclose(g); }
 
-    // Step 9: Hysteresis (in-place on dt_out)
+    // ==========================================
+    // Step 9: Hysteresis (Profiles copies to prevent in-place data pollution)
+    // ==========================================
+    start_time = clock();
+    for (int i = 0; i < ITERATIONS; ++i) {
+        dt_out_temp = dt_out; // Fresh copy configuration for accurate looping
+        hysteresis(dt_out_temp.data(), W, H);
+    }
+    end_time = clock();
+
+    elapsed_ms = (double)(end_time - start_time) / CLOCKS_PER_SEC * 1000.0;
+    cerr << "Hysteresis Average Time    : " << (elapsed_ms / ITERATIONS) << " ms\n";
+
+    // Final in-place run to finalize data for downstream output
     hysteresis(dt_out.data(), W, H);
+
+    cerr << "---------------------------------------------------------\n";
 
     // Step 10: Write outputs to stdout (L2 | L1 | NMS | double threshold)
     fwrite(mag_l2.data(),  1, N, stdout);

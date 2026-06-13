@@ -51,6 +51,8 @@ int main() {
     // Bare-metal safe timing variables
     clock_t start_time, end_time;
     double elapsed_ms;
+    double gaussian_ms, sobel_ms, magnitude_ms, direction_ms;
+    double nms_ms, dt_ms, hysteresis_ms;
 
     cerr << "--- Starting Phase 4 Performance Sweeps (" << ITERATIONS << " iterations) ---\n";
 
@@ -62,9 +64,10 @@ int main() {
         detector.applyGaussianBlur(tiger.data.data(), blurred.data.data());
     }
     end_time = clock();
-    
+
     elapsed_ms = (double)(end_time - start_time) / CLOCKS_PER_SEC * 1000.0;
     cerr << "Gaussian 5x5 Average Time : " << (elapsed_ms / ITERATIONS) << " ms\n";
+    gaussian_ms = elapsed_ms / ITERATIONS;
 
     // ==========================================
     // Step 4: Sobel -> separate Gx and Gy
@@ -74,9 +77,10 @@ int main() {
         detector.applySobel(blurred.data.data(), gx.data(), gy.data());
     }
     end_time = clock();
-    
+
     elapsed_ms = (double)(end_time - start_time) / CLOCKS_PER_SEC * 1000.0;
     cerr << "Sobel Gx/Gy Average Time   : " << (elapsed_ms / ITERATIONS) << " ms\n";
+    sobel_ms = elapsed_ms / ITERATIONS;
 
     // ==========================================
     // Step 5: Gradient Magnitude (L2 Norm Evaluated)
@@ -88,9 +92,10 @@ int main() {
         detector.computeMagnitudeL2(gx.data(), gy.data(), mag_l2.data());
     }
     end_time = clock();
-    
+
     elapsed_ms = (double)(end_time - start_time) / CLOCKS_PER_SEC * 1000.0;
     cerr << "Magnitude Average Time     : " << (elapsed_ms / ITERATIONS) << " ms\n";
+    magnitude_ms = elapsed_ms / ITERATIONS;
 
     // Step 5c: Convert L2 to uint16_t for NMS (preserves full range ~0-1441)
     for (int i = 0; i < N; ++i)
@@ -104,12 +109,17 @@ int main() {
         detector.computeDirection(gx.data(), gy.data(), direction.data());
     }
     end_time = clock();
-    
+
     elapsed_ms = (double)(end_time - start_time) / CLOCKS_PER_SEC * 1000.0;
     cerr << "Direction Average Time     : " << (elapsed_ms / ITERATIONS) << " ms\n";
+    direction_ms = elapsed_ms / ITERATIONS;
+
+    cerr << "---------------------------------------------------------\n";
 
     // ==========================================
     // Step 7: Non-Maximum Suppression (thins edges to 1-pixel width)
+    non_maximum_suppression(mag_l2_u16.data(), direction.data(),
+                            nms_out.data(), W, H);
     // ==========================================
     start_time = clock();
     for (int i = 0; i < ITERATIONS; ++i) {
@@ -119,9 +129,12 @@ int main() {
 
     elapsed_ms = (double)(end_time - start_time) / CLOCKS_PER_SEC * 1000.0;
     cerr << "NMS Average Time           : " << (elapsed_ms / ITERATIONS) << " ms\n";
+    nms_ms = elapsed_ms / ITERATIONS;
 
     // ==========================================
     // Step 8: Double Threshold
+    double_threshold(nms_out.data(), dt_out.data(), N,
+                     /*low=*/10, /*high=*/30);
     // ==========================================
     start_time = clock();
     for (int i = 0; i < ITERATIONS; ++i) {
@@ -131,11 +144,13 @@ int main() {
 
     elapsed_ms = (double)(end_time - start_time) / CLOCKS_PER_SEC * 1000.0;
     cerr << "Double Threshold Avg Time  : " << (elapsed_ms / ITERATIONS) << " ms\n";
+    dt_ms = elapsed_ms / ITERATIONS;
 
     // saves doublethresholding before used in hysteresis
     FILE* g = fopen("/tmp/dt_out.raw", "wb");
     if (g) { fwrite(dt_out.data(), 1, N, g); fclose(g); }
 
+    // Step 9: Hysteresis (in-place on dt_out)
     // ==========================================
     // Step 9: Hysteresis (Profiles copies to prevent in-place data pollution)
     // ==========================================
@@ -148,6 +163,7 @@ int main() {
 
     elapsed_ms = (double)(end_time - start_time) / CLOCKS_PER_SEC * 1000.0;
     cerr << "Hysteresis Average Time    : " << (elapsed_ms / ITERATIONS) << " ms\n";
+    hysteresis_ms = elapsed_ms / ITERATIONS;
 
     // Final in-place run to finalize data for downstream output
     hysteresis(dt_out.data(), W, H);
@@ -173,5 +189,20 @@ int main() {
     FILE* h = fopen("/tmp/hysteresis_out.raw", "wb");
     if (h) { fwrite(dt_out.data(), 1, N, h); fclose(h); }
     
+    // ==========================================
+    // Phase 5: Hotspot Identification
+    // ==========================================
+    double total_ms = gaussian_ms + sobel_ms + magnitude_ms + direction_ms
+                     + nms_ms + dt_ms + hysteresis_ms;
+    cerr << "\n--- Phase 5: Hotspot Identification ---\n";
+    cerr << "Gaussian  : " << (gaussian_ms   / total_ms * 100.0) << "%\n";
+    cerr << "Sobel     : " << (sobel_ms      / total_ms * 100.0) << "%\n";
+    cerr << "Magnitude : " << (magnitude_ms  / total_ms * 100.0) << "%\n";
+    cerr << "Direction : " << (direction_ms  / total_ms * 100.0) << "%\n";
+    cerr << "NMS       : " << (nms_ms        / total_ms * 100.0) << "%\n";
+    cerr << "D.Thresh  : " << (dt_ms         / total_ms * 100.0) << "%\n";
+    cerr << "Hysteresis: " << (hysteresis_ms / total_ms * 100.0) << "%\n";
+    cerr << "Total avg : " << total_ms << " ms per iteration\n";
+
     return 0;
 }

@@ -12,6 +12,8 @@
 | NMS          | 2.96      | 6.0%       | ❌ NO       |
 | Sobel Gx/Gy  | 2.77      | 5.6%       | ❌ NO       |
 
+![Phase 5 Hotspot Profile](results/phase5_profile.png)
+
 ### Key Observations:
 1. -O3 gives 5x speedup over -O0 (251ms → 49ms)
 2. Direction stage REGRESSED at -O3 (3.4ms → 11.9ms) 

@@ -28,7 +28,7 @@ const int H = 512;
 const int N = W * H;
 const int ITERATIONS = 100; // Total runs per stage to stabilize QEMU measurements
 
-```
+
 Image tiger(W, H);
 Image blurred(W, H);
 
@@ -184,6 +184,6 @@ FILE* h = fopen("/tmp/hysteresis_out.raw", "wb");
 if (h) { fwrite(dt_out.data(), 1, N, h); fclose(h); }
 
 return 0;
-```
+
 
 }

@@ -7,7 +7,7 @@
 | Magnitude    | 12.37     | 25.2%      | ✅ YES      |
 | Direction    | 11.96     | 24.3%      | ✅ YES      |
 | Gaussian 5x5 | 8.97      | 18.2%      | ✅ YES      |
-| D.Threshold  | 5.82      | 11.8%      | ⚠️ Maybe    |
+| D.Threshold  | 5.82      | 11.8%      | ❌ NO       |
 | Hysteresis   | 4.32      | 8.8%       | ❌ NO       |
 | NMS          | 2.96      | 6.0%       | ❌ NO       |
 | Sobel Gx/Gy  | 2.77      | 5.6%       | ❌ NO       |

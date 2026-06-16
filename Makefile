@@ -126,3 +126,9 @@ sweep_run: sweep_build
 	@echo "\n>>> Running Auto-Vectorized Binary:"
 	@convert $(IMG) -resize 512x512! -colorspace gray -depth 8 gray:- | QEMU_LD_PREFIX=/usr/riscv64-linux-gnu qemu-riscv64 -cpu rv64,v=true,vlen=128 $(BUILD_DIR)/canny_autovec.elf > /dev/null
 	@echo "\n========================================================="
+
+# Phase 6 compiling makefile :
+
+manual_rvv:
+	mkdir -p build
+	riscv64-unknown-elf-g++ -march=rv64gcv -Wall -O3 -DUSE_MANUAL_RVV -Iinclude src/*.cpp -o build/canny_manual_rvv.elf

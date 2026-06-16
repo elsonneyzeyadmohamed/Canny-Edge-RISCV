@@ -1,5 +1,5 @@
 #define _POSIX_C_SOURCE 199309L
-
+#include "rvv_kernels.h"
 #include "image_types.hpp"
 #include "canny.hpp"
 #include "nms.h"
@@ -139,7 +139,26 @@ cerr << "Sobel Gx/Gy Average Time   : " << sobel_ms << " ms\n";
 // ==========================================
 // Step 5: Gradient Magnitude (L2 Norm Evaluated)
 // ==========================================
+
+/*
+scalar magnetiude 
+
 detector.computeMagnitudeL1(gx.data(), gy.data(), mag_l1.data());
+
+
+*/
+
+// vectorized magnetiude 
+
+#ifdef USE_MANUAL_RVV  // note this condition sets the magnetiude to vectorized if it is applicable other wise it applies scalar one
+    computeMagnitudeL1_rvv(gx.data(), gy.data(), mag_l1.data(), N);
+#else
+    detector.computeMagnitudeL1(gx.data(), gy.data(), mag_l1.data());
+#endif
+
+//  Temporary -> Remove scalar form later 
+// Normal build: scalar magnitude
+// Manual RVV build: RVV magnitude
 
 start_time = now_ms();
 for (int i = 0; i < ITERATIONS; ++i) {

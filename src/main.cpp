@@ -1,3 +1,5 @@
+#define _POSIX_C_SOURCE 199309L
+
 #include "image_types.hpp"
 #include "canny.hpp"
 #include "nms.h"
@@ -14,13 +16,45 @@ using namespace std;
 
 // clock_gettime(CLOCK_MONOTONIC) measures real elapsed wall-clock time. For profiling under Linux/QEMU
 // CLOCK_MONOTONIC is preferred because it captures the actual elapsed runtime of each stage and is not affected by changes to the system clock.
-// for example if the cpu sleeps during the process clock gettime gets the sleep time but clock() doesnot 
+// for example if the cpu sleeps during the process clock gettime gets the sleep time but clock() doesnot
+// as a result of using baremetal compiler we are trying to get the clock_gettime function in a lower level way 
+
+#ifndef CLOCK_MONOTONIC
+#define CLOCK_MONOTONIC 1
+#endif
+
+static long linux_clock_gettime(long clock_id, struct timespec* ts)
+{
+register long a0 asm("a0") = clock_id;
+register long a1 asm("a1") = reinterpret_cast<long>(ts);
+register long a7 asm("a7") = 113;
+
+    
+asm volatile (
+    "ecall"
+    : "+r"(a0)
+    : "r"(a1), "r"(a7)
+    : "memory"
+);
+
+return a0;
+
+}
 
 static double now_ms() {
 struct timespec ts;
-clock_gettime(CLOCK_MONOTONIC, &ts);
-return (ts.tv_sec * 1000.0) + (ts.tv_nsec / 1000000.0);
+long ret = linux_clock_gettime(CLOCK_MONOTONIC, &ts);
+
+
+if (ret != 0) {
+    cerr << "clock_gettime syscall failed\n";
+    return 0.0;
 }
+
+return (ts.tv_sec * 1000.0) + (ts.tv_nsec / 1000000.0);
+
+}
+// get time monotonic way is finished here 
 
 int main() {
 const int W = 512;
@@ -54,13 +88,25 @@ vector<unsigned char> dt_out(N);
 vector<unsigned char> dt_out_temp(N);
 
 // Step 1: Read raw grayscale from stdin
-(void)fread(tiger.data.data(), 1, N, stdin);
+size_t bytes_read = fread(tiger.data.data(), 1, N, stdin);
+if (bytes_read != static_cast<size_t>(N)) {
+    cerr << "Warning: Expected " << N << " bytes, but read "
+         << bytes_read << " bytes from stdin.\n";
+}
 
 // Step 2: Initialize detector
 CannyEdgeDetector detector(W, H);
 
 double start_time, end_time;
 double elapsed_ms;
+
+double gaussian_ms = 0.0;
+double sobel_ms = 0.0;
+double magnitude_ms = 0.0;
+double direction_ms = 0.0;
+double nms_ms = 0.0;
+double double_threshold_ms = 0.0;
+double hysteresis_ms = 0.0;
 
 cerr << "--- Starting Phase 4 Performance Sweeps (" << ITERATIONS << " iterations) ---\n";
 
@@ -74,7 +120,8 @@ for (int i = 0; i < ITERATIONS; ++i) {
 end_time = now_ms();
 
 elapsed_ms = end_time - start_time;
-cerr << "Gaussian 5x5 Average Time : " << (elapsed_ms / ITERATIONS) << " ms\n";
+gaussian_ms = elapsed_ms / ITERATIONS;
+cerr << "Gaussian 5x5 Average Time : " << gaussian_ms << " ms\n";
 
 // ==========================================
 // Step 4: Sobel -> separate Gx and Gy
@@ -86,7 +133,8 @@ for (int i = 0; i < ITERATIONS; ++i) {
 end_time = now_ms();
 
 elapsed_ms = end_time - start_time;
-cerr << "Sobel Gx/Gy Average Time   : " << (elapsed_ms / ITERATIONS) << " ms\n";
+sobel_ms = elapsed_ms / ITERATIONS;
+cerr << "Sobel Gx/Gy Average Time   : " << sobel_ms << " ms\n";
 
 // ==========================================
 // Step 5: Gradient Magnitude (L2 Norm Evaluated)
@@ -100,7 +148,8 @@ for (int i = 0; i < ITERATIONS; ++i) {
 end_time = now_ms();
 
 elapsed_ms = end_time - start_time;
-cerr << "Magnitude Average Time     : " << (elapsed_ms / ITERATIONS) << " ms\n";
+magnitude_ms = elapsed_ms / ITERATIONS;
+cerr << "Magnitude Average Time     : " << magnitude_ms << " ms\n";
 
 // Step 5c: Convert L2 to uint16_t for NMS (preserves full range ~0-1441)
 for (int i = 0; i < N; ++i)
@@ -116,7 +165,8 @@ for (int i = 0; i < ITERATIONS; ++i) {
 end_time = now_ms();
 
 elapsed_ms = end_time - start_time;
-cerr << "Direction Average Time     : " << (elapsed_ms / ITERATIONS) << " ms\n";
+direction_ms = elapsed_ms / ITERATIONS;
+cerr << "Direction Average Time     : " << direction_ms << " ms\n";
 
 // ==========================================
 // Step 7: Non-Maximum Suppression (thins edges to 1-pixel width)
@@ -128,19 +178,21 @@ for (int i = 0; i < ITERATIONS; ++i) {
 end_time = now_ms();
 
 elapsed_ms = end_time - start_time;
-cerr << "NMS Average Time           : " << (elapsed_ms / ITERATIONS) << " ms\n";
+nms_ms = elapsed_ms / ITERATIONS;
+cerr << "NMS Average Time           : " << nms_ms << " ms\n";
 
 // ==========================================
 // Step 8: Double Threshold
 // ==========================================
 start_time = now_ms();
 for (int i = 0; i < ITERATIONS; ++i) {
-    double_threshold(nms_out.data(), dt_out.data(), N, /*low=*/10, /*high=*/30);
+    double_threshold(nms_out.data(), dt_out.data(), N, 10, 30);
 }
 end_time = now_ms();
 
 elapsed_ms = end_time - start_time;
-cerr << "Double Threshold Avg Time  : " << (elapsed_ms / ITERATIONS) << " ms\n";
+double_threshold_ms = elapsed_ms / ITERATIONS;
+cerr << "Double Threshold Avg Time  : " << double_threshold_ms << " ms\n";
 
 // saves doublethresholding before used in hysteresis
 FILE* g = fopen("/tmp/dt_out.raw", "wb");
@@ -151,23 +203,48 @@ if (g) { fwrite(dt_out.data(), 1, N, g); fclose(g); }
 // ==========================================
 start_time = now_ms();
 for (int i = 0; i < ITERATIONS; ++i) {
-    dt_out_temp = dt_out; // Fresh copy configuration for accurate looping
+    std::copy(dt_out.begin(), dt_out.end(), dt_out_temp.begin());
     hysteresis(dt_out_temp.data(), W, H);
 }
 end_time = now_ms();
 
 elapsed_ms = end_time - start_time;
-cerr << "Hysteresis Average Time    : " << (elapsed_ms / ITERATIONS) << " ms\n";
+hysteresis_ms = elapsed_ms / ITERATIONS;
+cerr << "Hysteresis Average Time    : " << hysteresis_ms << " ms\n";
 
 // Final in-place run to finalize data for downstream output
 hysteresis(dt_out.data(), W, H);
 
 cerr << "---------------------------------------------------------\n";
 
+double total_ms =
+    gaussian_ms +
+    sobel_ms +
+    magnitude_ms +
+    direction_ms +
+    nms_ms +
+    double_threshold_ms +
+    hysteresis_ms;
+
+cerr << "\n--- Phase 5: Hotspot Identification ---\n";
+
+if (total_ms > 0.0) {
+    cerr << "Gaussian  : " << (gaussian_ms / total_ms) * 100.0 << "%\n";
+    cerr << "Sobel     : " << (sobel_ms / total_ms) * 100.0 << "%\n";
+    cerr << "Magnitude : " << (magnitude_ms / total_ms) * 100.0 << "%\n";
+    cerr << "Direction : " << (direction_ms / total_ms) * 100.0 << "%\n";
+    cerr << "NMS       : " << (nms_ms / total_ms) * 100.0 << "%\n";
+    cerr << "D.Thresh  : " << (double_threshold_ms / total_ms) * 100.0 << "%\n";
+    cerr << "Hysteresis: " << (hysteresis_ms / total_ms) * 100.0 << "%\n";
+    cerr << "Total avg : " << total_ms << " ms per iteration\n";
+} else {
+    cerr << "Total avg : 0 ms per iteration\n";
+}
+
 // Step 10: Write outputs to stdout (L2 | L1 | NMS | double threshold)
 fwrite(mag_l2.data(),  1, N, stdout);
 fwrite(mag_l1.data(),  1, N, stdout);
-fwrite(nms_out.data(), 2, N, stdout);   // uint16_t -> 2 bytes per pixel
+fwrite(nms_out.data(), sizeof(uint16_t), N, stdout);
 fwrite(dt_out.data(),  1, N, stdout);
 
 // Step 11: Save NMS (normalized) and double threshold to /tmp for viewing
@@ -184,6 +261,5 @@ FILE* h = fopen("/tmp/hysteresis_out.raw", "wb");
 if (h) { fwrite(dt_out.data(), 1, N, h); fclose(h); }
 
 return 0;
-
 
 }

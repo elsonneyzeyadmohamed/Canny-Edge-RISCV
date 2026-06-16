@@ -1,36 +1,25 @@
-# Canny Edge Detection Project (RISC-V)
+## Phase 5: Hotspot Identification
 
-## Phase 5: Profiling and Hotspot Identification
+### Best Binary: -O3 (49.17 ms/iteration)
 
-Per-stage timing was measured over 100 iterations on QEMU (`-O3`, vlen=128) for the full Canny pipeline.
+| Stage        | Time (ms) | % of Total | RVV Target? |
+|--------------|-----------|------------|-------------|
+| Magnitude    | 12.37     | 25.2%      | ✅ YES      |
+| Direction    | 11.96     | 24.3%      | ✅ YES      |
+| Gaussian 5x5 | 8.97      | 18.2%      | ✅ YES      |
+| D.Threshold  | 5.82      | 11.8%      | ❌ NO       |
+| Hysteresis   | 4.32      | 8.8%       | ❌ NO       |
+| NMS          | 2.96      | 6.0%       | ❌ NO       |
+| Sobel Gx/Gy  | 2.77      | 5.6%       | ❌ NO       |
 
-| Stage             | Time (ms) | % of Total |
-|-------------------|-----------|------------|
-| Gaussian 5x5      | 9.23      | 17.7%      |
-| Sobel Gx/Gy       | 2.99      | 5.7%       |
-| Magnitude L2      | 13.11     | 25.1%      |
-| Direction         | 12.24     | 23.4%      |
-| NMS               | 4.30      | 8.2%       |
-| Double Threshold  | 6.00      | 11.5%      |
-| Hysteresis        | 4.43      | 8.5%       |
-| **Total**         | **52.31** | **100%**   |
+![Phase 5 Hotspot Profile](results/phase5_profile.png)
 
-![Phase 5 Profile](results/phase5_profile.png)
-
-### Hotspots Identified
-
-**Magnitude (25.1%)** and **Direction (23.4%)** are the largest contributors to execution time, followed by **Gaussian (17.7%)**.
-
-### Phase 6 RVV Priority (Amdahl's Law)
-
-1. **Magnitude** - pure arithmetic (multiply/add/sqrt), no branches, ideal for SIMD
-2. **Gaussian Blur** - convolution loops, also pure arithmetic, highly vectorizable
-3. **Direction** - branch-heavy logic; smaller RVV speedup expected but still worthwhile
-
-Together, Magnitude + Gaussian = 42.8% of execution time and are the strongest RVV candidates.
-
-To reproduce:
-```bash
-make riscv
-make test_image
-```
+### Key Observations:
+1. -O3 gives 5x speedup over -O0 (251ms → 49ms)
+2. Direction stage REGRESSED at -O3 (3.4ms → 11.9ms) 
+   due to branch-heavy conditional logic interfering with 
+   loop unrolling — Amdahl's Law in practice
+3. Auto-vectorization adds no benefit here (-O3 ≈ autovec)
+   because GCC's cost model rejects most loops
+4. Top 3 hotspots (Magnitude+Direction+Gaussian) = 67% 
+   of runtime → these are the RVV targets for Phase 6

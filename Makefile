@@ -129,8 +129,6 @@ sweep_run: sweep_build
 
 # Phase 6 compiling makefile :
 
-# Phase 6 compiling makefile :
-
 manual_rvv:
 	mkdir -p build
 	$(CXX_RISCV) -march=rv64gcv -Wall -O3 -DUSE_MANUAL_RVV -Iinclude src/*.cpp -o build/canny_manual_rvv.elf

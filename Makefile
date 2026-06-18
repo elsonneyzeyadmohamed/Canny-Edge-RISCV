@@ -201,7 +201,7 @@ vlen_sweep: manual_rvv
 		convert $(IMG) -resize 512x512! -colorspace gray -depth 8 gray:- | \
 		QEMU_LD_PREFIX=/usr/riscv64-linux-gnu \
 		qemu-riscv64 -cpu rv64,v=true,vlen=$$V $(BUILD_DIR)/canny_manual_rvv.elf > $(CHECK_DIR)/vlen_$$V.raw; \
-		cp /tmp/hysteresis_out.raw $(CHECK_DIR)/vlen_$${V}_hyst.raw; \
+#		cp /tmp/hysteresis_out.raw $(CHECK_DIR)/vlen_$${V}_hyst.raw; \
 	done
 	@dd if=$(CHECK_DIR)/vlen_128.raw bs=$(PIXELS) skip=0 count=1 of=$(CHECK_DIR)/vlen_128_l2.raw 2>/dev/null
 	@dd if=$(CHECK_DIR)/vlen_256.raw bs=$(PIXELS) skip=0 count=1 of=$(CHECK_DIR)/vlen_256_l2.raw 2>/dev/null

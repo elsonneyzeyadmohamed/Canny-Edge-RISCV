@@ -23,4 +23,11 @@ void computeMagnitudeL1_rvv(
     uint8_t* mag,
     int total_pixels
 );
+
+void computeMagnitudeL2_rvv(
+    const int16_t* gx,
+    const int16_t* gy,
+    uint8_t* mag,
+    int total_pixels
+);
 #endif

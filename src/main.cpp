@@ -136,33 +136,27 @@ elapsed_ms = end_time - start_time;
 sobel_ms = elapsed_ms / ITERATIONS;
 cerr << "Sobel Gx/Gy Average Time   : " << sobel_ms << " ms\n";
 
-// ==========================================
-// Step 5: Gradient Magnitude (L2 Norm Evaluated)
-// ==========================================
 
-/*
-scalar magnetiude 
+// magnitude L1 generates absolute gx and gy instead of root of squares 
+// coded to compare only but not used in path 
 
 detector.computeMagnitudeL1(gx.data(), gy.data(), mag_l1.data());
 
 
-*/
 
-// vectorized magnetiude 
+// ==========================================
+// Step 5: Gradient Magnitude (L2 Norm Evaluated) root of squares is used 
+// ==========================================
 
-#ifdef USE_MANUAL_RVV  // note this condition sets the magnetiude to vectorized if it is applicable other wise it applies scalar one
-    computeMagnitudeL1_rvv(gx.data(), gy.data(), mag_l1.data(), N);
-#else
-    detector.computeMagnitudeL1(gx.data(), gy.data(), mag_l1.data());
-#endif
-
-//  Temporary -> Remove scalar form later 
-// Normal build: scalar magnitude
-// Manual RVV build: RVV magnitude
 
 start_time = now_ms();
 for (int i = 0; i < ITERATIONS; ++i) {
+
+/*#ifdef USE_MANUAL_RVV
+    computeMagnitudeL2_rvv(gx.data(), gy.data(), mag_l2.data(), N);
+#else*/
     detector.computeMagnitudeL2(gx.data(), gy.data(), mag_l2.data());
+//#endif
 }
 end_time = now_ms();
 
@@ -179,7 +173,13 @@ for (int i = 0; i < N; ++i)
 // ==========================================
 start_time = now_ms();
 for (int i = 0; i < ITERATIONS; ++i) {
+
+#ifdef USE_MANUAL_RVV
+    computeDirection_rvv(gx.data(), gy.data(), direction.data(), N);
+#else
+
     detector.computeDirection(gx.data(), gy.data(), direction.data());
+#endif
 }
 end_time = now_ms();
 

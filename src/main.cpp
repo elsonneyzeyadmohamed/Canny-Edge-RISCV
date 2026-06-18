@@ -152,11 +152,11 @@ detector.computeMagnitudeL1(gx.data(), gy.data(), mag_l1.data());
 start_time = now_ms();
 for (int i = 0; i < ITERATIONS; ++i) {
 
-/*#ifdef USE_MANUAL_RVV
+#ifdef USE_RVV_L2
     computeMagnitudeL2_rvv(gx.data(), gy.data(), mag_l2.data(), N);
-#else*/
+#else
     detector.computeMagnitudeL2(gx.data(), gy.data(), mag_l2.data());
-//#endif
+#endif
 }
 end_time = now_ms();
 

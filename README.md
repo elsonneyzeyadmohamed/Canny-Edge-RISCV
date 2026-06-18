@@ -207,3 +207,33 @@ Because the measured values are wall-clock times under QEMU, absolute timing val
    because GCC's cost model rejects most loops
 4. Top 3 hotspots (Magnitude+Direction+Gaussian) = 67% 
    of runtime → these are the RVV targets for Phase 6
+
+## Phase 6: Hotspot Results Comparison
+
+
+## Gaussian:
+
+
+
+
+
+
+
+
+
+
+## Magnetiude:
+
+
+
+
+
+
+
+
+
+
+## Direction:
+
+
+

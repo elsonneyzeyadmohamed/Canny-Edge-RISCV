@@ -5,7 +5,7 @@
 
 
 void applyGaussianBlur_rvv(
-    
+
 // write here your includes
 
 );
@@ -23,4 +23,16 @@ void computeMagnitudeL1_rvv(
     uint8_t* mag,
     int total_pixels
 );
+
+
+#ifdef USE_RVV_L2
+void computeMagnitudeL2_rvv(
+    const int16_t* gx,
+    const int16_t* gy,
+    uint8_t* mag,
+    int total_pixels
+);
+#endif
+
+
 #endif

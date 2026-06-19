@@ -150,7 +150,7 @@ test_image: riscv
 	@dd if=/tmp/both_raw.gray bs=$(PIXELS) count=1 skip=2 2>/dev/null | \
 	convert -size $(SIZE) -depth 8 gray:- $(RESULT_DIR)/result_magnitude_L1.png
 
-	@echo "Skipping result_direction.png...
+	@echo "Skipping result_direction.png..."
 
 	@echo "Creating result_nms.png..."
 	@dd if=/tmp/both_raw.gray bs=$(PIXELS) count=2 skip=4 of=/tmp/nms_u16_$(WIDTH)x$(HEIGHT).raw 2>/dev/null

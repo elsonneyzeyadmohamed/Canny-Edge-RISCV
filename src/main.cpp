@@ -162,7 +162,7 @@ int main()
     start_time = now_ms();
 
     for (int i = 0; i < ITERATIONS; ++i) {
-#ifdef USE_RVV_L1
+#ifdef RVV_KERNELS_H
         computeMagnitudeL1_rvv(
             gx.data(),
             gy.data(),

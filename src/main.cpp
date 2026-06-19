@@ -349,7 +349,6 @@ int main()
     double total_ms =
         gaussian_ms +
         sobel_ms +
-        magnitude_l1_ms +
         magnitude_l2_ms +
         direction_ms +
         nms_ms +
@@ -361,7 +360,6 @@ int main()
     if (total_ms > 0.0) {
         cerr << "Gaussian  : " << (gaussian_ms / total_ms) * 100.0 << "%\n";
         cerr << "Sobel     : " << (sobel_ms / total_ms) * 100.0 << "%\n";
-        cerr << "Mag L1    : " << (magnitude_l1_ms / total_ms) * 100.0 << "%\n";
         cerr << "Mag L2    : " << (magnitude_l2_ms / total_ms) * 100.0 << "%\n";
         cerr << "Direction : " << (direction_ms / total_ms) * 100.0 << "%\n";
         cerr << "NMS       : " << (nms_ms / total_ms) * 100.0 << "%\n";

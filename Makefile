@@ -150,9 +150,7 @@ test_image: riscv
 	@dd if=/tmp/both_raw.gray bs=$(PIXELS) count=1 skip=2 2>/dev/null | \
 	convert -size $(SIZE) -depth 8 gray:- $(RESULT_DIR)/result_magnitude_L1.png
 
-	@echo "Creating result_direction.png..."
-	@dd if=/tmp/both_raw.gray bs=$(PIXELS) count=1 skip=3 2>/dev/null | \
-	convert -size $(SIZE) -depth 8 gray:- -evaluate multiply 85 $(RESULT_DIR)/result_direction.png
+	@echo "Skipping result_direction.png...
 
 	@echo "Creating result_nms.png..."
 	@dd if=/tmp/both_raw.gray bs=$(PIXELS) count=2 skip=4 of=/tmp/nms_u16_$(WIDTH)x$(HEIGHT).raw 2>/dev/null
@@ -191,9 +189,7 @@ stage_pngs: riscv
 	@dd if=/tmp/canny_stages_$(WIDTH)x$(HEIGHT).raw bs=$(PIXELS) count=1 skip=2 2>/dev/null | \
 	convert -size $(SIZE) -depth 8 gray:- $(STAGE_DIR)/02_magnitude_L1.png
 
-	@echo "Creating 03_direction.png..."
-	@dd if=/tmp/canny_stages_$(WIDTH)x$(HEIGHT).raw bs=$(PIXELS) count=1 skip=3 2>/dev/null | \
-	convert -size $(SIZE) -depth 8 gray:- -evaluate multiply 85 $(STAGE_DIR)/03_direction.png
+	@echo "Skipping 03_direction.png..."
 
 	@echo "Creating 04_nms.png..."
 	@dd if=/tmp/canny_stages_$(WIDTH)x$(HEIGHT).raw bs=$(PIXELS) count=2 skip=4 of=/tmp/nms_u16_$(WIDTH)x$(HEIGHT).raw 2>/dev/null

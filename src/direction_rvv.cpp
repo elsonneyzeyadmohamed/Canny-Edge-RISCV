@@ -33,7 +33,7 @@ void computeDirection_rvv(
     int i = 0;
 
     while (i < total_pixels) {
-        size_t vl = __riscv_vsetvl_e16m2(total_pixels - i);
+        size_t vl = __riscv_vsetvl_e16m2(total_pixels - i);    //For 16-bit elements using LMUL=2, how many can I process now?
 
         // Load Gx and Gy as signed 16-bit vectors.
         vint16m2_t vx = __riscv_vle16_v_i16m2(&gx[i], vl);
@@ -57,6 +57,7 @@ void computeDirection_rvv(
         // Masks for scalar conditions:
         // condition 0 degrees: ay*5 < ax*2
         // condition 90 degrees: ay*5 > ax*12  <=> ax*12 < ay*5
+        //vmslt means vector mask set if less than.
         vbool8_t mask_dir0 = __riscv_vmslt_vv_i16m2_b8(ay5, ax2, vl);
         vbool8_t mask_dir2 = __riscv_vmslt_vv_i16m2_b8(ax12, ay5, vl);
 
@@ -83,6 +84,6 @@ void computeDirection_rvv(
         // Store direction output.
         __riscv_vse8_v_u8m1(&direction[i], vdir, vl);
 
-        i += vl;
+        i += vl;   // not a fixed number as vl is changeable
     }
 }

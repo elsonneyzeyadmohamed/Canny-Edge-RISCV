@@ -1,0 +1,21 @@
+vector version is not specified, use the default value v1.0
+--- Starting Phase 4 Performance Sweeps (100 iterations) ---
+Gaussian 5x5 Average Time : 3.30745 ms
+Sobel Gx/Gy Average Time   : 3.17554 ms
+Magnitude L1 Average Time  : 4.47745 ms
+Magnitude L2 Average Time  : 6.00137 ms
+Direction Average Time     : 5.91937 ms
+NMS Average Time           : 1.07141 ms
+Double Threshold Avg Time  : 2.74877 ms
+Hysteresis Average Time    : 1.79603 ms
+---------------------------------------------------------
+
+--- Phase 5: Hotspot Identification ---
+Gaussian  : 13.7696%
+Sobel     : 13.2204%
+Mag L2    : 24.985%
+Direction : 24.6436%
+NMS       : 4.46049%
+D.Thresh  : 11.4437%
+Hysteresis: 7.47726%
+Total avg : 24.0199 ms per iteration

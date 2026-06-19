@@ -17,12 +17,12 @@ CannyEdgeDetector::CannyEdgeDetector(int w, int h) : width(w), height(h) {}
 void CannyEdgeDetector::applyGaussianBlur(const unsigned char* input,
                                            unsigned char* output) {
     const int kernel[5][5] = {
-        { 2,  4,  5,  4,  2},
-        { 4,  9, 12,  9,  4},
-        { 5, 12, 15, 12,  5},
-        { 4,  9, 12,  9,  4},
-        { 2,  4,  5,  4,  2}
-    };
+    { 1,  4,  7,  4, 1},
+    { 4, 16, 26, 16, 4},
+    { 7, 26, 41, 26, 7},
+    { 4, 16, 26, 16, 4},
+    { 1,  4,  7,  4, 1}
+};
     const int weight = 273;
 
     for (int y = 0; y < height; y++) {

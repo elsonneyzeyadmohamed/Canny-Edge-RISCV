@@ -1,3 +1,444 @@
+# Canny Edge Detection on RISC-V
+
+This project implements a Canny Edge Detection pipeline in C++ and runs it on a RISC-V target using QEMU. The main purpose of the early project stages is to build a correct scalar baseline, verify each image-processing function, and prepare the codebase for later profiling and optimization.
+
+The project reads a grayscale image, applies the Canny pipeline, and generates intermediate and final outputs that can be inspected as raw files or converted into PNG images.
+
+---
+
+## Project Objective
+
+The objective of this project is to implement and validate a complete Canny Edge Detection pipeline for a RISC-V environment.
+
+The project focuses on:
+
+* Implementing Canny Edge Detection in C++.
+* Cross-compiling the code for RISC-V.
+* Running the RISC-V binary using QEMU.
+* Reading a grayscale image as raw bytes from standard input.
+* Generating intermediate outputs for debugging and visualization.
+* Validating the main algorithmic stages using Google Test.
+* Preparing a reliable scalar reference before entering the profiling and optimization phases.
+
+---
+
+## Canny Edge Detection Pipeline
+
+The implemented pipeline follows these stages:
+
+```text
+Input Image
+    ↓
+Gaussian Blur
+    ↓
+Sobel / Gradient Stage
+    ↓
+Non-Maximum Suppression
+    ↓
+Double Threshold
+    ↓
+Hysteresis
+    ↓
+Final Edge Image
+```
+
+The scalar implementation is treated as the reference version. Any later optimized implementation should be compared against this scalar baseline.
+
+---
+
+## 1. Input Image Handling
+
+The program expects a grayscale image represented as raw bytes.
+
+The image dimensions are controlled by the Makefile variables:
+
+```makefile
+WIDTH  ?= 513
+HEIGHT ?= 366
+SIZE   := $(WIDTH)x$(HEIGHT)
+```
+
+The total number of pixels is:
+
+```text
+PIXELS = WIDTH × HEIGHT
+```
+
+For example:
+
+```text
+513 × 366 = 187758 pixels
+```
+
+The project can also be run with a different image size by overriding the variables:
+
+```bash
+make run IMG=tiger-animals-cat-predator-preview.jpg WIDTH=512 HEIGHT=512
+```
+
+---
+
+## 2. Image Conversion
+
+Normal image files such as JPG or PNG are converted to raw grayscale format using ImageMagick.
+
+Example:
+
+```bash
+convert tiger-animals-cat-predator-preview.jpg -resize 512x512! -colorspace gray -depth 8 gray:-
+```
+
+This command performs the following operations:
+
+| Part               | Meaning                                       |
+| ------------------ | --------------------------------------------- |
+| `-resize 512x512!` | Forces the image to exactly 512×512 pixels    |
+| `-colorspace gray` | Converts the image to grayscale               |
+| `-depth 8`         | Uses 8 bits per pixel                         |
+| `gray:-`           | Writes raw grayscale bytes to standard output |
+
+To verify that the converted image size is correct:
+
+```bash
+convert tiger-animals-cat-predator-preview.jpg -resize 512x512! -colorspace gray -depth 8 gray:- | wc -c
+```
+
+For a 512×512 image, the expected output is:
+
+```text
+262144
+```
+
+If the byte count does not match `WIDTH × HEIGHT`, the benchmark and generated output are invalid because the program is not processing the intended image data.
+
+---
+
+## 3. Gaussian Blur
+
+Gaussian Blur is the first processing stage after reading the input image.
+
+The purpose of Gaussian Blur is to reduce noise before edge detection. This helps avoid detecting false edges caused by small intensity variations.
+
+The output of this stage is a smoothed version of the input image. This blurred image is then passed to the Sobel / Gradient stage.
+
+---
+
+## 4. Sobel / Gradient Stage
+
+The Sobel / Gradient stage is responsible for computing edge strength and edge direction.
+
+This stage contains four related sub-steps:
+
+```text
+Sobel / Gradient Stage
+    ├── Gx calculation
+    ├── Gy calculation
+    ├── Magnitude calculation
+    └── Direction quantization
+```
+
+---
+
+### 4.1 Gx Calculation
+
+`Gx` is the horizontal gradient.
+
+It measures intensity changes in the horizontal direction and is useful for detecting vertical edges.
+
+Because Sobel gradient values can be negative and can exceed the 8-bit range, `Gx` is stored using signed 16-bit integers.
+
+---
+
+### 4.2 Gy Calculation
+
+`Gy` is the vertical gradient.
+
+It measures intensity changes in the vertical direction and is useful for detecting horizontal edges.
+
+Like `Gx`, `Gy` is stored using signed 16-bit integers.
+
+---
+
+### 4.3 Magnitude Calculation
+
+The magnitude represents the edge strength at each pixel.
+
+The project supports two magnitude forms:
+
+```text
+L1 magnitude = |Gx| + |Gy|
+L2 magnitude = sqrt(Gx² + Gy²)
+```
+
+The L1 magnitude is simpler and faster because it uses only absolute value and addition.
+
+The L2 magnitude is more accurate because it computes the Euclidean gradient magnitude.
+
+The scalar Canny pipeline uses the L2 magnitude as the main magnitude input for the later stages.
+
+---
+
+### 4.4 Direction Quantization
+
+The direction stage converts the gradient angle into one of four categories:
+
+```text
+0 = 0 degrees
+1 = 45 degrees
+2 = 90 degrees
+3 = 135 degrees
+```
+
+This direction information is required by Non-Maximum Suppression. NMS needs to know which neighboring pixels should be compared with the current pixel.
+
+---
+
+## 5. Non-Maximum Suppression
+
+Non-Maximum Suppression reduces thick edges into thinner edges.
+
+For each pixel, the algorithm checks whether the current magnitude is a local maximum along the gradient direction.
+
+If the current pixel is not the strongest value in that direction, it is suppressed.
+
+The NMS stage uses:
+
+```text
+magnitude + direction
+```
+
+as its inputs.
+
+---
+
+## 6. Double Threshold
+
+Double Threshold classifies pixels into three categories:
+
+```text
+255 = strong edge
+128 = weak edge
+0   = non-edge
+```
+
+The current thresholds are:
+
+```text
+low  = 10
+high = 30
+```
+
+Strong edges are kept. Weak edges are temporarily kept and then processed by Hysteresis.
+
+---
+
+## 7. Hysteresis
+
+Hysteresis is the final edge connection stage.
+
+A weak edge is preserved only if it is connected to a strong edge. Otherwise, it is removed.
+
+This stage produces the final edge image.
+
+---
+
+## Project Requirements
+
+The project requires:
+
+| Tool                      | Purpose                                                                                  |
+| ------------------------- | ---------------------------------------------------------------------------------------- |
+| `riscv64-unknown-elf-g++` | Cross-compiles the C++ code for RISC-V                                                   |
+| `qemu-riscv64`            | Runs the RISC-V ELF binary on the host machine                                           |
+| ImageMagick `convert`     | Converts normal images into raw grayscale input and converts raw outputs into PNG images |
+| `make`                    | Automates build, test, run, and output-generation commands                               |
+| `g++`                     | Builds native Google Test executables                                                    |
+| Google Test               | Validates individual functions and stages                                                |
+
+---
+
+## Project Structure
+
+```text
+Canny-Edge-RISCV/
+│
+├── include/
+│   ├── canny.hpp
+│   ├── image_types.hpp
+│   ├── nms.h
+│   ├── double_threshold.h
+│   ├── hysteresis.h
+│   └── rvv_kernels.h
+│
+├── src/
+│   ├── main.cpp
+│   ├── canny.cpp
+│   ├── nms.cpp
+│   ├── double_threshold.cpp
+│   ├── hysteresis.cpp
+│   ├── direction_rvv.cpp
+│   ├── magnitude_rvv.cpp
+│   └── magnitude_l2_rvv.cpp
+│
+├── tests/
+│   ├── test_canny.cpp
+│   ├── test_nms.cpp
+│   ├── test_double_threshold.cpp
+│   └── test_hysteresis.cpp
+│
+├── scripts/
+│   ├── compare_raw.py
+│   └── compare_raw_outputs.py
+│
+├── build/
+│   └── generated binaries
+│
+├── results/
+│   └── generated images, logs, and comparison outputs
+│
+├── Makefile
+└── README.md
+```
+
+The `include/` directory contains declarations and shared headers.
+
+The `src/` directory contains the implementation of the Canny pipeline stages.
+
+The `tests/` directory contains Google Test unit tests.
+
+The `scripts/` directory contains raw-output comparison scripts.
+
+The `build/` and `results/` directories are generated directories and should not be treated as source code.
+
+---
+
+## Makefile Variables
+
+The Makefile provides several configurable variables:
+
+| Variable         | Default                                  | Purpose                                                 |
+| ---------------- | ---------------------------------------- | ------------------------------------------------------- |
+| `CXX_RISCV`      | `riscv64-unknown-elf-g++`                | RISC-V cross-compiler                                   |
+| `CXX_NATIVE`     | `g++`                                    | Native compiler used for Google Test                    |
+| `IMG`            | `tiger-animals-cat-predator-preview.jpg` | Input image                                             |
+| `WIDTH`          | `513`                                    | Image width                                             |
+| `HEIGHT`         | `366`                                    | Image height                                            |
+| `SIZE`           | `$(WIDTH)x$(HEIGHT)`                     | Image size passed to ImageMagick                        |
+| `PIXELS`         | `WIDTH × HEIGHT`                         | Number of pixels used for raw output extraction         |
+| `QEMU_LD_PREFIX` | `/usr/riscv64-linux-gnu`                 | QEMU library prefix                                     |
+| `QEMU_CPU`       | `rv64,v=true,vlen=128`                   | QEMU CPU configuration                                  |
+| `RVV_EXTRA_DEFS` | empty                                    | Optional extra compile-time definitions for experiments |
+
+Example with custom image size:
+
+```bash
+make test_image IMG=tiger-animals-cat-predator-preview.jpg WIDTH=512 HEIGHT=512
+```
+
+---
+
+## Makefile Commands
+
+The Makefile is used to simplify building, testing, running, generating images, and preparing for later profiling and optimization.
+
+### Build Commands
+
+| Command              | What it does                                                                                                                       |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `make` or `make all` | Builds the default scalar RISC-V binary by calling `make riscv`                                                                    |
+| `make riscv`         | Builds the main scalar RISC-V binary using `-O3` and outputs `build/canny_riscv.elf`                                               |
+| `make riscv_O0`      | Builds a RISC-V binary using `-O0`                                                                                                 |
+| `make riscv_O2`      | Builds a RISC-V binary using `-O2`                                                                                                 |
+| `make riscv_O3`      | Builds a RISC-V binary using `-O3`                                                                                                 |
+| `make riscv_autovec` | Builds an auto-vectorized binary using `-O3 -ftree-vectorize` and saves GCC vectorization information in `build/vector_report.txt` |
+| `make sweep_build`   | Builds the `-O0`, `-O2`, `-O3`, and auto-vectorized binaries                                                                       |
+
+---
+
+### Google Test Commands
+
+| Command       | What it does                              |
+| ------------- | ----------------------------------------- |
+| `make native` | Builds all native Google Test executables |
+| `make test`   | Runs all Google Test executables          |
+
+---
+
+### Basic Commands
+
+| Command                          | What it does                                                      |
+| -------------------------------- | ----------------------------------------------------------------- |
+| `make run`                       | Builds and runs the scalar RISC-V binary through QEMU             |
+| `make clean`                     | Removes the `build/` directory                                    |
+| `make clean_results`             | Removes generated results and temporary raw files                 |
+| `make push NAME="..." MSG="..."` | Runs `git add .`, commits using `NAME: MSG`, and pushes to GitHub |
+
+Note: `make push` should be used carefully because it runs `git add .`. Always check `git status` before using it to avoid committing generated files.
+
+---
+
+### Image Generation Commands
+
+| Command                  | What it does                                                                                                |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| `make test_image`        | Runs the scalar RISC-V binary and generates main PNG outputs in `results/`                                  |
+| `make stage_pngs`        | Runs the scalar RISC-V binary and generates organized stage-by-stage PNGs in `results/stages_WIDTHxHEIGHT/` |
+| `make open_images`       | Opens the `results/` folder                                                                                 |
+| `make open_stage_images` | Opens the stage-output folder                                                                               |
+
+### Later Profiling and Optimization Commands
+
+The following targets are included in the Makefile for later phases, but they are not part of the pre-Phase-4 scalar documentation results.
+
+| Command            | What it does                                                                                              |
+| ------------------ | --------------------------------------------------------------------------------------------------------- |
+| `make sweep_run`   | Builds and runs the optimization sweep for `-O0`, `-O2`, `-O3`, and auto-vectorized binaries              |
+| `make manual_rvv`  | Builds the manual RVV binary using `USE_MANUAL_RVV` and `USE_RVV_GAUSSIAN`                                |
+| `make compare_rvv` | Runs scalar and manual RVV binaries on the same image and prints timing blocks                            |
+| `make check_rvv`   | Runs scalar and RVV binaries, saves raw outputs, and compares them using `scripts/compare_raw_outputs.py` |
+| `make vlen_sweep`  | Runs the manual RVV binary using VLEN values 128, 256, and 512 and checks output equivalence              |
+
+These commands are used after the scalar baseline is validated.
+
+---
+
+## Google Test Validation
+
+Google Test is used to validate the scalar implementation before profiling and optimization.
+
+The goal is to verify each major function in isolation before relying on the full Canny pipeline.
+
+The scalar implementation is the reference version for later correctness comparisons.
+
+---
+
+## Current Status Before Phase 4
+
+Before Phase 4, the project includes:
+
+* A complete scalar Canny Edge Detection pipeline.
+* RISC-V cross-compilation support.
+* QEMU execution support.
+* ImageMagick-based image conversion.
+* Raw output generation for each major stage.
+* PNG generation for visual inspection.
+* Google Test validation for the main scalar functions.
+* Makefile automation for building, running, testing, and generating outputs.
+
+At this stage, the scalar implementation is considered the trusted baseline. Phase 4 and later phases focus on profiling, hotspot identification, auto-vectorization analysis, manual RVV development, and scalar-versus-RVV correctness comparison.
+
+---
+
+## Notes
+
+The input image must always be converted to the exact size specified by `WIDTH` and `HEIGHT`.
+
+Generated folders such as `build/` and `results/` should not be treated as source files.
+
+The scalar implementation should be verified before collecting performance measurements or comparing optimized versions.
+
+
+
 # Phase 4: Compiler Optimization Sweep
 
 ## Objective

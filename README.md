@@ -649,32 +649,122 @@ Because the measured values are wall-clock times under QEMU, absolute timing val
 4. Top 3 hotspots (Magnitude+Direction+Gaussian) = 67% 
    of runtime → these are the RVV targets for Phase 6
 
-## Phase 6: Hotspot Results Comparison
-
-
-## Gaussian:
 
 
 
+## Phase 6: Manual RVV Optimization Results
+
+## Optimization Table
+
+Image size:
+
+```text
+513 × 366 = 187,758 pixels
+```
+
+| Stage            | Scalar `-O3` | RVV 128    | RVV 256    |
+| ---------------- | ------------ | ---------- | ---------- |
+| Gaussian 5×5     | 6.58335 ms   | 45.2515 ms | 39.6791 ms |
+| Sobel Gx/Gy      | 5.02564 ms   | 5.03673 ms | 5.04368 ms |
+| Magnitude L2     | 9.38616 ms   | 8.97176 ms | 9.11594 ms |
+| Direction        | 9.64107 ms   | 5.69558 ms | 4.89872 ms |
+| NMS              | 2.27283 ms   | 2.22251 ms | 2.22604 ms |
+| Double Threshold | 4.371 ms     | 4.23765 ms | 3.37642 ms |
+| Hysteresis       | 3.33265 ms   | 3.27503 ms | 3.15699 ms |
+| Total Average    | 40.6127 ms   | 74.6908 ms | 67.4969 ms |
+
+Note: L1 magnitude is measured separately but excluded from the total average percentage because the main Canny pipeline continues using L2 magnitude for NMS.
+
+---
+
+## Additional L1 Magnitude Timing
+
+| Stage        | Scalar `-O3` | RVV 128    | RVV 256    |
+| ------------ | ------------ | ---------- | ---------- |
+| Magnitude L1 | 7.45007 ms   | 6.92262 ms | 6.34042 ms |
+
+L1 showed a small improvement with RVV because it mainly uses absolute value, addition, reduction, and normalization.
+
+---
+
+## Main Observations
+
+The RVV direction kernel improved clearly:
+
+```text
+Scalar Direction: 9.64107 ms
+RVV 128 Direction: 5.69558 ms
+RVV 256 Direction: 4.89872 ms
+```
+
+L1 and L2 magnitude also showed small improvements.
+
+However, the total RVV runtime became slower because the RVV Gaussian stage became much slower under QEMU:
+
+```text
+Scalar Gaussian: 6.58335 ms
+RVV 128 Gaussian: 45.2515 ms
+RVV 256 Gaussian: 39.6791 ms
+```
+
+This made Gaussian the dominant bottleneck in the manual RVV version.
+
+---
+
+## Why RVV Was Slower Under QEMU
+
+The slowdown does not mean RVV is wrong. The main reason is that the project is running under QEMU, not on real RVV hardware.
+
+On real RVV hardware, one vector instruction can process multiple elements in parallel. Under QEMU, RVV instructions are emulated in software, so each vector instruction adds decoding and simulation overhead.
+
+The RVV version may also include extra overhead from:
+
+* `vsetvl` inside vector loops
+* vector load/store emulation
+* mask and merge operations
+* widening arithmetic
+* reduction and normalization
+* Gaussian 5×5 neighborhood memory accesses
+
+The Gaussian RVV kernel is especially expensive under QEMU because each output pixel depends on a 5×5 neighborhood, requiring many vector loads and arithmetic operations.
+
+Therefore, QEMU is useful for correctness and portability validation, but it is not always reliable for real RVV performance conclusions.
+
+---
+
+Increasing VLEN reduced runtime because more elements can be processed per vector iteration. However, even at VLEN 512, the RVV version was still slower than scalar because Gaussian remained expensive under QEMU.
+
+---
+
+## VLEN-Agnostic Correctness
+
+The VLEN sweep compared outputs for VLEN 128, 256, and 512.
+
+All stages matched exactly:
+
+This confirms that the RVV implementation is VLEN-agnostic. Changing VLEN changes how many elements are processed per vector iteration, but it does not change the final output.
+
+---
+
+## Conclusion
+
+Phase 6 successfully added manual RVV kernels and verified correctness across different VLEN values.
+
+The main conclusions are:
+
+* Direction RVV achieved clear speed improvement.
+* L1 and L2 magnitude showed small improvements.
+* Gaussian RVV became slower under QEMU and dominated total runtime.
+* Total RVV runtime was slower than scalar because of QEMU vector emulation overhead.
+* VLEN sweep confirmed exact output equivalence across VLEN 128, 256, and 512.
+
+Overall, the manual RVV implementation is functionally correct and VLEN-agnostic, but the measured QEMU runtime should not be treated as final real-hardware RVV performance.
 
 
 
 
 
 
-
-## Magnetiude:
-
-
-
-
-
-
-
-
-
-
-## Direction:
 
 
 

@@ -4,7 +4,7 @@
 #include "double_threshold.h"
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-// Run double_threshold on a small hand-crafted input and return the output.
+// It takes a high-precision 16-bit input array, automatically allocates an 8-bit output array of matching size, passes raw pointers (.data()) to your underlying C-style implementation, and returns the result.
 static std::vector<uint8_t> run(const std::vector<uint16_t>& input,
                                 uint16_t low, uint16_t high)
 {
@@ -14,6 +14,7 @@ static std::vector<uint8_t> run(const std::vector<uint16_t>& input,
     return out;
 }
 
+// These tests ensure your code accurately splits pixel data into the three core categories required for Canny Edge Detection
 // ── Test 1: pixels above high_thresh → STRONG (255) ─────────────────────────
 TEST(DoubleThreshold, StrongPixel) {
     std::vector<uint16_t> input = {250};
@@ -56,6 +57,7 @@ TEST(DoubleThreshold, OneBelowLowThresh) {
     EXPECT_EQ(out[0], 0);
 }
 
+//These ensure your loops don't cause buffer overflows, handle large image streams, and behave correctly across diverse data arrays
 // ── Test 7: all-zero input → all NO EDGE ────────────────────────────────────
 TEST(DoubleThreshold, AllZeroInput) {
     std::vector<uint16_t> input(100, 0);
@@ -63,6 +65,7 @@ TEST(DoubleThreshold, AllZeroInput) {
     for (int i = 0; i < 100; ++i)
         EXPECT_EQ(out[i], 0) << "failed at index " << i;
 }
+
 
 // ── Test 8: mixed input → correct classification for each pixel ──────────────
 TEST(DoubleThreshold, MixedInput) {
@@ -74,6 +77,8 @@ TEST(DoubleThreshold, MixedInput) {
         EXPECT_EQ(out[i], expect[i]) << "failed at index " << i
                                      << " input=" << input[i];
 }
+
+//These tests enforce the boundaries of your arithmetic types and confirm that values match expectations for subsequent stages
 
 // ── Test 9: max uint16_t value → STRONG ──────────────────────────────────────
 TEST(DoubleThreshold, MaxUint16IsStrong) {
@@ -114,7 +119,8 @@ TEST(DoubleThreshold, WeakValueIs128) {
     EXPECT_EQ(out[0], 128)
         << "WEAK must be 128 so hysteresis can find it";
 }
-
+//This is the standard entry function for an executable built with GoogleTest.
+//returns 0 if all test cases pass, or 1 if any fail.
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
